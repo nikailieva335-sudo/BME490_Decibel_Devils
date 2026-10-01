@@ -8,19 +8,20 @@ LOG_MODULE_REGISTER(mic_db, LOG_LEVEL_INF); // Register a logging module named "
 
 #define NUM_SAMPLES     256   // Number of samples to read in one window
 #define SAMPLE_DELAY_US 100   // Delay between samples in microseconds
-#define CAL_WINDOWS     50    // Number of windows to read for calibration
+#define CAL_WINDOWS     50    // Number of windows to read for calibration (~2 seconds at 256 samples/window and 100us/sample)
 
 
 static struct adc_dt_spec adc_channel = ADC_DT_SPEC_GET(DT_PATH(zephyr_user));
 
-static int16_t samples[NUM_SAMPLES];
-static int16_t buf;
-static struct adc_sequence sequence = {
+static int16_t samples[NUM_SAMPLES]; 	// Raw ADC readings
+static int16_t buf; 					// Buffer for ADC reading
+static struct adc_sequence sequence = { // ADC sequence configuration
 	.buffer = &buf,
 	.buffer_size = sizeof(buf),
 };
 
 
+// Reads one window of samples into an array and returns 0 on success or a negative error code on failure.
 static int read_window(void)
 {
 	for (int i = 0; i < NUM_SAMPLES; i++) {
@@ -35,7 +36,7 @@ static int read_window(void)
 	return 0;
 }
 
-
+// Calculates the RMS value of the samples in the current window. Returns the RMS value as a float.
 static float window_rms(void)
 {
 	float mean = 0.0f;
@@ -54,6 +55,8 @@ static float window_rms(void)
 
 	return sqrtf(sum_sq / NUM_SAMPLES);
 }
+
+// Initializates ADC, calibrates and logs the sound level continuously in dB. Returns 0 on success or a negative error code on failure.
 
 int main(void)
 {
@@ -77,6 +80,7 @@ int main(void)
 	}
 
 
+	// Unit conversion from mV to relative dB
 	int32_t full_scale_mv = 4095;
 
 	adc_raw_to_millivolts_dt(&adc_channel, &full_scale_mv);
