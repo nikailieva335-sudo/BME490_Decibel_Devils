@@ -1,0 +1,38 @@
+@startuml
+title Concept D: App with Microphone
+
+[*] --> Init
+
+state Init {
+    state Power_On : power on microphone
+    state Start_App : start exercise on device
+    [*] --> Power_On
+    Power_On --> Start_App
+}
+
+state "Microphone Device Running" as Running {
+    state Sampling : read microphone
+    state Processing : compute loudness (dB)
+    [*] --> Sampling
+    Sampling --> Processing
+    Processing --> Sampling
+}
+
+state Bluetooth : send data
+
+state "App Running" as App {
+    state Feedback : send visual/audio feedback to user
+    [*] --> Feedback
+}
+
+state Error : sensor or Bluetooth failure
+
+Init --> Running : ready
+Running --> Bluetooth : send processed data
+Bluetooth --> App : send data to smartphone/laptop app
+Running --> Error : failure
+Error --> Init : retry
+Running --> [*] : power off
+
+
+@enduml
