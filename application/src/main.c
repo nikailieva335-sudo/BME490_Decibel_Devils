@@ -3,6 +3,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 #include <math.h>
+#include "ble_lib.h"
+
 
 LOG_MODULE_REGISTER(mic_db, LOG_LEVEL_INF); // Register a logging module named "mic_db"
 
@@ -10,6 +12,7 @@ LOG_MODULE_REGISTER(mic_db, LOG_LEVEL_INF); // Register a logging module named "
 #define SAMPLE_DELAY_US 100   // Delay between samples in microseconds
 #define CAL_WINDOWS     50    // Number of windows to read for calibration (~2 seconds at 256 samples/window and 100us/sample)
 
+#define SEND_DATA_WINDOWS 5 // Number of windows to read before sending data over BLE
 
 static struct adc_dt_spec adc_channel = ADC_DT_SPEC_GET(DT_PATH(zephyr_user));
 
@@ -62,6 +65,12 @@ int main(void)
 {
 	int err;
 
+	err = bluetooth_init(NULL);
+	if (err) {
+		LOG_ERR("Bluetooth initialization failed (%d)", err);
+		return 0;
+	}
+
 	if (!adc_is_ready_dt(&adc_channel)) {
 		LOG_ERR("ADC controller device %s not ready", adc_channel.dev->name);
 		return 0;
@@ -86,7 +95,7 @@ int main(void)
 	adc_raw_to_millivolts_dt(&adc_channel, &full_scale_mv);
 	float mv_per_step = full_scale_mv / 4095.0f;
 
-
+	// Calibration
 	LOG_INF("Calibrating - keep quiet for ~2 seconds...");
 	k_msleep(500);
 
@@ -111,14 +120,26 @@ int main(void)
 
 
 	while (1) {
-		err = read_window();
-		if (err < 0) {
-			LOG_ERR("Could not read (%d)", err);
+		float rms_sum = 0.0f;
+		int good_windows = 0;
+
+		for (int w = 0; w < SEND_DATA_WINDOWS; w++) {
+			err = read_window();
+			if (err < 0) {
+				LOG_ERR("Could not read (%d)", err);
+				bluetooth_set_errors(ERR_ADC_READ);
+				continue;
+			}
+			rms_sum += window_rms();
+			good_windows++;
+		}
+
+		if (good_windows == 0) {
 			k_msleep(50);
 			continue;
 		}
 
-		float rms = window_rms();
+		float rms = rms_sum / good_windows;
 
 		if (rms < 0.01f) {
 			rms = 0.01f;  /* log10(0) is undefined */
@@ -128,6 +149,14 @@ int main(void)
 
 		LOG_INF("Vrms: %6.2f mV   level: %5.1f dB",
 			(double)(rms * mv_per_step), (double)db);
+
+		/* Round to the nearest tenth of a dB, e.g. 12.43 -> 124 */
+		int32_t db10 = (int32_t)(db * 10.0f + (db >= 0.0f ? 0.5f : -0.5f));
+
+		err = bluetooth_send_sound_level(db10);
+		if (err) {
+			LOG_WRN("BLE send failed (%d)", err);
+		}
 	}
 
 	return 0;
