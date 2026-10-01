@@ -1,0 +1,28 @@
+@startuml
+title Concept B: Desk Buddy Speech Therapy
+
+[*] --> Init
+state Init : power on device
+
+Init --> Running : ready
+
+state Running {
+  state Sampling : read microphone
+  state Processing : compute loudness (dB)
+  state Feedback : send visual/audio feedback to user
+  Sampling --> Processing
+  Processing --> Sampling
+  Processing --> Feedback
+  state Bluetooth : transfer data to smartphone/laptop
+  Processing --> Bluetooth : send data
+
+}
+
+
+
+state Error : sensor or Bluetooth failure
+Running --> Error : failure
+Error --> Init : retry
+Running --> [*] : power off
+
+@enduml
