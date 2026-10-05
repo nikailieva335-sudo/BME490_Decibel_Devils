@@ -10,7 +10,7 @@ from bleak import BleakClient, BleakScanner
 DEVICE_NAME = "Decibel_Devils"
 SOUND_UUID = "e9ea0001-e19b-0065-02df-c7907585fc48"
 WINDOW_SECONDS = 30
-Y_MIN, Y_MAX = -10, 50
+Y_MIN, Y_MAX = 0, 20
 TARGET_LOW, TARGET_HIGH = 10, 20
 readings = deque(maxlen=1000)
 
