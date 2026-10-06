@@ -46,8 +46,14 @@ struct bt_remote_srv_cb {
     void (*data_rx)(struct bt_conn *conn, const uint8_t *const data, uint16_t len);
 };
 
+/* Payload sent by the sound characteristic to the display. */
+struct sound_measurement {
+	int32_t db10;
+	int32_t frequency_hz;
+};
+
 int bluetooth_init(struct bt_remote_srv_cb *remote_cb);
-int bluetooth_send_sound_level(int32_t db10);
+int bluetooth_send_sound_level(int32_t db10, int32_t frequency_hz);
 int bluetooth_set_errors(uint32_t flags);
 
 #endif

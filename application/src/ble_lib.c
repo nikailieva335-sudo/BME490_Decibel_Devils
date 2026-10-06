@@ -8,7 +8,7 @@ LOG_MODULE_REGISTER(blelib, LOG_LEVEL_INF);
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
 #define MAX_MSG_LEN 64
 
-static int32_t sound_level_db10;
+static struct sound_measurement sound_measurement;
 static uint32_t error_flags;
 static bool sound_notify_enabled;
 static bool err_notify_enabled;
@@ -30,7 +30,7 @@ static ssize_t read_sound_cb(struct bt_conn *conn, const struct bt_gatt_attr *at
 			     void *buf, uint16_t len, uint16_t offset)
 {
 	return bt_gatt_attr_read(conn, attr, buf, len, offset,
-				 &sound_level_db10, sizeof(sound_level_db10));
+				 &sound_measurement, sizeof(sound_measurement));
 }
 
 static ssize_t read_error_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr,
@@ -216,16 +216,17 @@ int bluetooth_init(struct bt_remote_srv_cb *remote_cb)
 	return 0;
 }
 
-int bluetooth_send_sound_level(int32_t db10)
+int bluetooth_send_sound_level(int32_t db10, int32_t frequency_hz)
 {
-	sound_level_db10 = db10;
+	sound_measurement.db10 = db10;
+	sound_measurement.frequency_hz = frequency_hz;
 
 	if (!current_conn || !sound_notify_enabled) {
 		return 0;
 	}
 
 	return bt_gatt_notify(current_conn, &remote_srv.attrs[SOUND_ATTR_IDX],
-			      &sound_level_db10, sizeof(sound_level_db10));
+			      &sound_measurement, sizeof(sound_measurement));
 }
 
 int bluetooth_set_errors(uint32_t flags)
