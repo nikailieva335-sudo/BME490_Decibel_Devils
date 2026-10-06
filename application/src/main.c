@@ -8,8 +8,8 @@
 
 LOG_MODULE_REGISTER(mic_db, LOG_LEVEL_INF); // Register a logging module named "mic_db"
 
-#define NUM_SAMPLES     256   // Number of samples to read in one window
-#define SAMPLE_DELAY_US 100   // Delay between samples in microseconds
+#define NUM_SAMPLES     1000   // Number of samples to read in one window
+#define SAMPLE_DELAY_US 1   // Delay between samples in microseconds
 #define CAL_WINDOWS     50    // Number of windows to read for calibration (~2 seconds at 256 samples/window and 100us/sample)
 
 #define SEND_DATA_WINDOWS 5 // Number of windows to read before sending data over BLE
@@ -57,6 +57,45 @@ static float window_rms(void)
 	}
 
 	return sqrtf(sum_sq / NUM_SAMPLES);
+}
+
+// FREQUENCY MEASUREMENT (COUNTS PEAKS) 
+// Counts positive local peaks in one window.
+static int window_peak_count(void)
+{
+	float mean = 0.0f;
+	float sum_sq = 0.0f;
+
+	for (int i = 0; i < NUM_SAMPLES; i++) {
+		mean += samples[i];
+	}
+	mean /= NUM_SAMPLES;
+
+	for (int i = 0; i < NUM_SAMPLES; i++) {
+		float deviation = samples[i] - mean;
+		sum_sq += deviation * deviation;
+	}
+
+	float threshold = mean + 0.25f * sqrtf(sum_sq / NUM_SAMPLES);
+	int peaks = 0;
+
+	for (int i = 1; i < NUM_SAMPLES - 1; i++) {
+		if (samples[i] > threshold &&
+			samples[i] >= samples[i - 1] &&
+			samples[i] > samples[i + 1]) {
+			peaks++;
+		}
+	}
+
+	return peaks;
+}
+
+// Converts the number of detected peaks to Hz using the nominal sample period.
+static float window_frequency_hz(void)
+{
+	float window_seconds = (NUM_SAMPLES * SAMPLE_DELAY_US) / 1000000.0f;
+
+	return window_peak_count() / window_seconds;
 }
 
 // Initializates ADC, calibrates and logs the sound level continuously in dB. Returns 0 on success or a negative error code on failure.
@@ -121,6 +160,7 @@ int main(void)
 
 	while (1) {
 		float rms_sum = 0.0f;
+		float frequency_sum = 0.0f;
 		int good_windows = 0;
 
 		for (int w = 0; w < SEND_DATA_WINDOWS; w++) {
@@ -131,6 +171,7 @@ int main(void)
 				continue;
 			}
 			rms_sum += window_rms();
+			frequency_sum += window_frequency_hz();
 			good_windows++;
 		}
 
@@ -140,6 +181,7 @@ int main(void)
 		}
 
 		float rms = rms_sum / good_windows;
+		float frequency_hz = frequency_sum / good_windows;
 
 		if (rms < 0.01f) {
 			rms = 0.01f;  /* log10(0) is undefined */
@@ -147,13 +189,13 @@ int main(void)
 
 		float db = 20.0f * log10f(rms / rms_ref);
 
-		LOG_INF("Vrms: %6.2f mV   level: %5.1f dB",
-			(double)(rms * mv_per_step), (double)db);
+		LOG_INF("Vrms: %6.2f mV   level: %5.1f dB   frequency: %5.0f Hz",
+			(double)(rms * mv_per_step), (double)db, (double)frequency_hz);
 
 		/* Round to the nearest tenth of a dB, e.g. 12.43 -> 124 */
 		int32_t db10 = (int32_t)(db * 10.0f + (db >= 0.0f ? 0.5f : -0.5f));
 
-		err = bluetooth_send_sound_level(db10);
+		err = bluetooth_send_sound_level(db10, (int32_t)(frequency_hz + 0.5f));
 		if (err) {
 			LOG_WRN("BLE send failed (%d)", err);
 		}

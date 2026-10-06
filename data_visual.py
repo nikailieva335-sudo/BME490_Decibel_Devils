@@ -15,8 +15,12 @@ TARGET_LOW, TARGET_HIGH = 10, 20
 readings = deque(maxlen=1000)
 
 def on_data(_, data):
-    db = int.from_bytes(data, "little", signed=True) / 10
-    readings.append((time.monotonic(), db))
+    if len(data) != 8:
+        return
+
+    db = int.from_bytes(data[0:4], "little", signed=True) / 10
+    frequency = int.from_bytes(data[4:8], "little", signed=True)
+    readings.append((time.monotonic(), db, frequency))
 
 async def ble_task():
     print(f"Scanning for {DEVICE_NAME}...")
@@ -36,13 +40,14 @@ async def ble_task():
 
 def update(_):
     now = time.monotonic()
-    points = [(t - now, db) for t, db in list(readings)
+    points = [(t - now, db) for t, db, _ in list(readings)
               if now - t <= WINDOW_SECONDS]
 
     if points:
         xs, ys = zip(*points)
         line.set_data(xs, ys)
-        ax.set_title(f"{ys[-1]:.1f} dB")
+        _, db, frequency = readings[-1]
+        ax.set_title(f"{db:.1f} dB    {frequency} Hz")
 
 threading.Thread(target=lambda: asyncio.run(ble_task()), daemon=True).start()
 fig, ax = plt.subplots()
