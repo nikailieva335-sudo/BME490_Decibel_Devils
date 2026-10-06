@@ -8,8 +8,8 @@
 
 LOG_MODULE_REGISTER(mic_db, LOG_LEVEL_INF); // Register a logging module named "mic_db"
 
-#define NUM_SAMPLES     256   // Number of samples to read in one window
-#define SAMPLE_DELAY_US 100   // Delay between samples in microseconds
+#define NUM_SAMPLES     1000   // Number of samples to read in one window
+#define SAMPLE_DELAY_US 1   // Delay between samples in microseconds
 #define CAL_WINDOWS     50    // Number of windows to read for calibration (~2 seconds at 256 samples/window and 100us/sample)
 
 #define SEND_DATA_WINDOWS 5 // Number of windows to read before sending data over BLE
@@ -59,8 +59,8 @@ static float window_rms(void)
 	return sqrtf(sum_sq / NUM_SAMPLES);
 }
 
-/* -------------------- FREQUENCY MEASUREMENT (PEAK COUNT) -------------------- */
-// Counts positive local peaks above a noise-relative threshold in one window.
+// FREQUENCY MEASUREMENT (COUNTS PEAKS) 
+// Counts positive local peaks in one window.
 static int window_peak_count(void)
 {
 	float mean = 0.0f;
@@ -97,7 +97,6 @@ static float window_frequency_hz(void)
 
 	return window_peak_count() / window_seconds;
 }
-/* ------------------ END FREQUENCY MEASUREMENT (PEAK COUNT) ------------------ */
 
 // Initializates ADC, calibrates and logs the sound level continuously in dB. Returns 0 on success or a negative error code on failure.
 
